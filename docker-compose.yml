@@ -1,0 +1,267 @@
+version: '3'
+
+networks:
+  demo-net:
+    name: demo-net
+    driver: bridge
+
+services:
+
+  postgres:
+    networks:
+      - demo-net
+    image: postgres:13.1
+    restart: always
+    container_name: postgres
+    hostname: postgres
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_PASSWORD: kong
+      POSTGRES_USER: kong
+
+  kong-cp-bootstrap:
+    image: kong/kong-gateway:2.8.2.2-rhel7
+    networks:
+      - demo-net
+    depends_on:
+      - postgres
+    restart: on-failure
+    command: kong migrations bootstrap
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=postgres
+      - KONG_PG_DATABASE=kong
+      - KONG_PG_USER=kong
+      - KONG_PG_PASSWORD=kong
+      - KONG_PASSWORD=password
+      - KONG_LICENSE_DATA=${KONG_LICENSE_DATA}
+      - KONG_PLUGINS=bundled
+
+  kong-control-plane:
+    image: kong/kong-gateway:2.8.2.2-rhel7
+    container_name: kong-control-plane
+    hostname: kong-control-plane
+    user: root
+    networks:
+      - demo-net
+    depends_on:
+      - postgres
+    restart: always
+    volumes:
+      - ./certs:/etc/secrets/kong-cluster/
+    ports:
+      - 8001:8001
+      - 8002:8002
+      - 8003:8003
+      - 8004:8004
+# luarocks install /home/kong/kong-plugin-api-version-0.1.0-1.all.rock &&
+    command: >
+      sh -c "kong start "
+    environment:
+      - KONG_ADMIN_API=http://api.kong.lan:8001
+      - KONG_ADMIN_GUI_URL=http://manager.kong.lan:8002
+      - KONG_PORTAL_API_URL=http://portal-api.kong.lan:8004
+      - KONG_PORTAL_GUI_HOST=portal-gui.kong.lan:8003
+      - KONG_PORTAL_GUI_URL=http://portal-gui.kong.lan:8003
+      - KONG_PORTAL_GUI_PROTOCOL=http
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+      - KONG_ADMIN_GUI_LISTEN=0.0.0.0:8002
+      - KONG_PORTAL_GUI_LISTEN=0.0.0.0:8003
+      - KONG_PORTAL_API_LISTEN=0.0.0.0:8004
+      - KONG_CLUSTER_LISTEN=0.0.0.0:8005 ssl
+      - KONG_CLUSTER_TELEMETRY_LISTEN=0.0.0.0:8006 ssl
+      - KONG_STATUS_LISTEN=0.0.0.0:8100
+      - KONG_PORTAL_CORS_ORIGINS=http://portal-api.kong.lan:8004, http://portal-gui.kong.lan:8003
+      - KONG_LOG_LEVEL=debug
+      - KONG_ENFORCE_RBAC=on
+      - KONG_ADMIN_GUI_AUTH=basic-auth
+      - KONG_PORTAL_AUTH=basic-auth
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_PORTAL_GUI_ACCESS_LOG=/dev/stdout
+      - KONG_PORTAL_GUI_ERROR_LOG=/dev/stderr
+      - KONG_PORTAL_API_ACCESS_LOG=/dev/stdout
+      - KONG_PORTAL_API_ERROR_LOG=/dev/stderr
+      - KONG_PORTAL=on
+      - KONG_ADMIN_GUI_FLAGS={"IMMUNITY_ENABLED":true}
+      - KONG_ANONYMOUS_REPORTS=off
+      - KONG_ROLE=control_plane
+      - KONG_CLUSTER_CERT=/etc/secrets/kong-cluster/tls.crt
+      - KONG_CLUSTER_CERT_KEY=/etc/secrets/kong-cluster/tls.key
+      - KONG_CLUSTER_MTLS=shared
+      - KONG_STREAM_LISTEN=off
+      - KONG_LICENSE_DATA=${KONG_LICENSE_DATA}
+      - KONG_PG_PASSWORD=kong
+      - KONG_PG_USER=kong
+      - KONG_PG_DATABASE=kong
+      - KONG_PG_HOST=postgres
+      - KONG_VITALS=on
+      - KONG_VITALS_STRATEGY=prometheus
+      - KONG_VITALS_STATSD_ADDRESS=statsd-exporter:9125
+      - KONG_VITALS_TSDB_ADDRESS=prometheus:9090
+      - KONG_ADMIN_GUI_SESSION_CONF={"cookie_secure":false,"storage":"kong","cookie_name":"admin_session","cookie_lifetime":31557600,"cookie_samesite":"off","secret":"thatsecret"}
+      - KONG_PORTAL_SESSION_CONF={"storage":"kong","cookie_name":"portal_session","secret":"thissecret","cookie_secure":false,"cookie_samesite":"off","cookie_domain":".kong.lan"}
+      - KONG_PLUGINS=bundled
+      - KONG_DATA_PLANE_CONFIG_CACHE_MODE=encrypted
+
+  kong-data-plane:
+    # image: kong-docker-kong-enterprise-edition-docker.bintray.io/kong-enterprise-edition:2.3.2.0-alpine
+    image: kong/kong-gateway:2.8.2.2-rhel7	
+    container_name: kong-data-plane
+    hostname: kong-data-plane
+    user: root
+    networks:
+      - demo-net
+    depends_on:
+      - kong-control-plane
+    restart: always
+    volumes:
+      - ./certs:/etc/secrets/kong-cluster/
+    ports:
+      - 8000:8000
+      - 8500:8500/tcp
+    command: >
+      sh -c "kong start "
+    environment:
+      - KONG_PROXY_LISTEN=0.0.0.0:8000
+      - KONG_STATUS_LISTEN=0.0.0.0:8100
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_GUI_LISTEN=off
+      - KONG_ADMIN_LISTEN=off
+      - KONG_CLUSTER_LISTEN=off
+      - KONG_CLUSTER_TELEMETRY_LISTEN=off
+      - KONG_CLUSTER_CONTROL_PLANE=kong-control-plane:8005
+      - KONG_CLUSTER_TELEMETRY_ENDPOINT=kong-control-plane:8006
+      - KONG_CLUSTER_MTLS=shared
+      - KONG_CLUSTER_CERT=/etc/secrets/kong-cluster/tls.crt
+      - KONG_CLUSTER_CERT_KEY=/etc/secrets/kong-cluster/tls.key
+      - KONG_LUA_SSL_TRUSTED_CERTIFICATE=/etc/secrets/kong-cluster/ca.crt
+      - KONG_ROLE=data_plane
+      - KONG_DATABASE=off
+      - KONG_LOG_LEVEL=debug
+      - KONG_LUA_PACKAGE_PATH=/opt/?.lua;/opt/?/init.lua;;
+      - KONG_NGINX_WORKER_PROCESSES=2
+      - KONG_PLUGINS=bundled
+      - KONG_LICENSE_DATA=${KONG_LICENSE_DATA}
+      - KONG_STREAM_LISTEN=off
+      - KONG_VITALS=on
+      - KONG_VITALS_STRATEGY=prometheus
+      - KONG_VITALS_STATSD_ADDRESS=statsd-exporter:9125
+      - KONG_VITALS_TSDB_ADDRESS=prometheus:9090
+      - KONG_DATA_PLANE_CONFIG_CACHE_MODE=encrypted
+      - KONG_DATA_PLANE_CONFIG_CACHE_PATH=/home/kong/
+
+  #
+  # elasticsearch:
+  #   container_name: elasticsearch
+  #   hostname: elasticsearch
+  #   networks:
+  #     - demo-net
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:7.11.2
+  #   environment:
+  #     - ES_JAVA_OPTS=-Xms1g -Xmx1g
+  #     - discovery.type=single-node
+  #
+  # kibana:
+  #   image: docker.elastic.co/kibana/kibana:7.11.2
+  #   networks:
+  #     - demo-net
+  #   hostname: kibana
+  #   container_name: kibana
+  #   ports:
+  #     - 5601:5601
+  #
+  # filebeat-raw:
+  #   image: docker.elastic.co/beats/filebeat:7.2.0
+  #   hostname: filebeat-raw
+  #   networks:
+  #     - demo-net
+  #   container_name: filebeat-raw
+  #   user: root
+  #   volumes:
+  #     - ./data/filebeat/filebeat_raw.yml:/usr/share/filebeat/filebeat.yml:ro
+  #     - /var/lib/docker:/var/lib/docker:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #
+  # filebeat-nginx:
+  #   image: docker.elastic.co/beats/filebeat:7.2.0
+  #   hostname: filebeat-nginx
+  #   networks:
+  #     - demo-net
+  #   container_name: filebeat-nginx
+  #   user: root
+  #   volumes:
+  #     - ./data/filebeat/filebeat_nginx.yml:/usr/share/filebeat/filebeat.yml:ro
+  #     - /var/lib/docker:/var/lib/docker:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #
+  # filebeat:
+  #   image: docker.elastic.co/beats/filebeat:7.2.0
+  #   hostname: filebeat
+  #   networks:
+  #     - demo-net
+  #   container_name: filebeat
+  #   user: root
+  #   volumes:
+  #     - ./data/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+  #     - /var/lib/docker:/var/lib/docker:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock
+
+  # statsd-exporter:
+  #   image: prom/statsd-exporter:v0.20.1
+  #   hostname: statsd-exporter
+  #   networks:
+  #     - demo-net
+  #   container_name: statsd-exporter
+  #   user: root
+  #   volumes:
+  #     - ./data/statsd_exporter/statsd_mapping.yml:/tmp/statsd_mapping.yml
+  #   command:
+  #     - "--statsd.mapping-config=/tmp/statsd_mapping.yml"
+  #     - "--statsd.listen-unixgram=''"
+  #
+  # prometheus:
+  #   image: prom/prometheus:v2.25.2
+  #   hostname: prometheus
+  #   networks:
+  #     - demo-net
+  #   container_name: prometheus
+  #   volumes:
+  #     - ./data/prometheus/:/etc/prometheus/
+  #   command:
+  #     - "--config.file=/etc/prometheus/prometheus.yml"
+  #   ports:
+  #     - 9090:9090
+  # grafana:
+  #   image: grafana/grafana:7.5.1
+  #   networks:
+  #     - demo-net
+  #   container_name: grafana
+  #   ports:
+  #     - 3000:3000
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=password
+  #     - GF_SERVER_DOMAIN=grafana.kong.lan
+  # zipkin:
+  #   networks:
+  #     - demo-net
+  #   image: openzipkin/zipkin
+  #   ports:
+  #     - "9411:9411/tcp"
+  # echo-server:
+  #   networks:
+  #     - demo-net
+  #   image: "jmalloc/echo-server"
+  #   ports:
+  #     - "8080:8080/tcp"
+  # tcp-echo:
+  #   image: istio/tcp-echo-server:1.1
+  #   networks:
+  #     - demo-net
+  #   ports:
+  #     - "9000:9000"
