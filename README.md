@@ -2,7 +2,14 @@
 
 ## Overview
 Instructions are in the doc attached only to this branch here
-<https://github.com/granthbr/kong-obs-demo-env/blob/feature/jreq-valid-sql/Kong%20Prep%20Request%20Validator%20config.pdf> 
+
+Kong mangager is hosted at: manager.kong.lan
+Username: kong_admin
+
+Prereq: 
+and environment variable set for the Kong License:
+export KONG_LICENSE_DATA={"license":{"payload":{"admin_seats":"5",","version":"1"}}
+
 
 These three files are include a global config (with body params), route config (overrides the global config) and meta data (so all config is no overwritten).
 
