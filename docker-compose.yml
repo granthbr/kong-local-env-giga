@@ -63,6 +63,11 @@ services:
       - KONG_PORTAL_API_URL=http://portal-api.kong.lan:8004
       - KONG_PORTAL_GUI_HOST=portal-gui.kong.lan:8003
       - KONG_PORTAL_GUI_URL=http://portal-gui.kong.lan:8003
+      # - KONG_ADMIN_API=http://localhost:8001
+      # - KONG_ADMIN_GUI_URL=http://localhost:8002
+      # - KONG_PORTAL_API_URL=http://ocalhost:8004
+      # - KONG_PORTAL_GUI_HOST=localhost:8003
+      # - KONG_PORTAL_GUI_URL=http://localhost:8003
       - KONG_PORTAL_GUI_PROTOCOL=http
       - KONG_ADMIN_LISTEN=0.0.0.0:8001
       - KONG_ADMIN_GUI_LISTEN=0.0.0.0:8002
@@ -98,16 +103,15 @@ services:
       - KONG_PG_DATABASE=kong
       - KONG_PG_HOST=postgres
       - KONG_VITALS=on
-      - KONG_VITALS_STRATEGY=prometheus
-      - KONG_VITALS_STATSD_ADDRESS=statsd-exporter:9125
-      - KONG_VITALS_TSDB_ADDRESS=prometheus:9090
+      # - KONG_VITALS_STRATEGY=prometheus
+   #    - KONG_VITALS_STATSD_ADDRESS=statsd-exporter:9125
+   #    - KONG_VITALS_TSDB_ADDRESS=prometheus:9090
       - KONG_ADMIN_GUI_SESSION_CONF={"cookie_secure":false,"storage":"kong","cookie_name":"admin_session","cookie_lifetime":31557600,"cookie_samesite":"off","secret":"thatsecret"}
       - KONG_PORTAL_SESSION_CONF={"storage":"kong","cookie_name":"portal_session","secret":"thissecret","cookie_secure":false,"cookie_samesite":"off","cookie_domain":".kong.lan"}
       - KONG_PLUGINS=bundled
-      - KONG_DATA_PLANE_CONFIG_CACHE_MODE=encrypted
+
 
   kong-data-plane:
-    # image: kong-docker-kong-enterprise-edition-docker.bintray.io/kong-enterprise-edition:2.3.2.0-alpine
     image: kong/kong-gateway:2.8.2.2-rhel7	
     container_name: kong-data-plane
     hostname: kong-data-plane
@@ -150,11 +154,10 @@ services:
       - KONG_LICENSE_DATA=${KONG_LICENSE_DATA}
       - KONG_STREAM_LISTEN=off
       - KONG_VITALS=on
-      - KONG_VITALS_STRATEGY=prometheus
-      - KONG_VITALS_STATSD_ADDRESS=statsd-exporter:9125
-      - KONG_VITALS_TSDB_ADDRESS=prometheus:9090
+      # - KONG_VITALS_STRATEGY=database
+      # - KONG_VITALS_STATSD_ADDRESS=statsd-exporter:9125
+      # - KONG_VITALS_TSDB_ADDRESS=prometheus:9090
       - KONG_DATA_PLANE_CONFIG_CACHE_MODE=encrypted
-      - KONG_DATA_PLANE_CONFIG_CACHE_PATH=/home/kong/
 
   #
   # elasticsearch:
